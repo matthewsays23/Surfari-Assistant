@@ -1,35 +1,49 @@
-const { SlashCommandBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, InteractionType } = require("discord.js");
+// src/commands/util/status.js
+const { 
+  SlashCommandBuilder, 
+  StringSelectMenuBuilder, 
+  StringSelectMenuOptionBuilder, 
+  ActionRowBuilder, 
+  EmbedBuilder 
+} = require("discord.js");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("status")
-    .setDescription("Set the bot's status (Playing, Watching, Listening, etc.)"),
+    .setDescription("🌴 Set Surfari's bot status.."),
 
   async execute(interaction) {
-    // Dropdown menu for activity type
+    // Tropical-themed embed
+    const embed = new EmbedBuilder()
+      .setColor("#81b46b")
+      .setTitle("🌸 Surfari Status Panel")
+      .setDescription("Pick a status type below and set my vibe!")
+      .setFooter({ text: "Surfers Island 🌺" });
+
+    // Dropdown menu
     const select = new StringSelectMenuBuilder()
       .setCustomId("status-type")
-      .setPlaceholder("Choose activity type...")
+      .setPlaceholder("☀️ Choose the vibe")
       .addOptions(
         new StringSelectMenuOptionBuilder()
-          .setLabel("Playing")
+          .setLabel("☀️ Playing")
           .setValue("0"), // 0 = Playing
         new StringSelectMenuOptionBuilder()
-          .setLabel("Streaming")
+          .setLabel("🎥 Streaming")
           .setValue("1"), // 1 = Streaming
         new StringSelectMenuOptionBuilder()
-          .setLabel("Listening")
+          .setLabel("🎶 Listening")
           .setValue("2"), // 2 = Listening
         new StringSelectMenuOptionBuilder()
-          .setLabel("Watching")
+          .setLabel("🌴 Watching")
           .setValue("3"), // 3 = Watching
         new StringSelectMenuOptionBuilder()
-          .setLabel("Competing")
+          .setLabel("🏆 Competing")
           .setValue("5")  // 5 = Competing
       );
 
     const row = new ActionRowBuilder().addComponents(select);
 
-    await interaction.reply({ content: "Pick an activity type:", components: [row], ephemeral: true });
+    await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
   },
 };
