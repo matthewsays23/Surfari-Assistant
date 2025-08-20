@@ -1,4 +1,5 @@
-const { Interaction } = require("discord.js");
+const { ModalBuilder, Interaction, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder } = require("discord.js");
+
 
 module.exports = {
   name: "interactionCreate",
@@ -16,18 +17,15 @@ module.exports = {
         if (interaction.customId === "status-type") {
           const activityType = parseInt(interaction.values[0]);
 
-          // inside if (interaction.isStringSelectMenu())
-const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder } = require("discord.js");
-
 const modal = new ModalBuilder()
   .setCustomId(`status-modal-${activityType}`)
-  .setTitle("🌸 Let's Finish Up!");
+  .setTitle("Almost There! 🐠");
 
 const input = new TextInputBuilder()
   .setCustomId("status-text")
-  .setLabel("🍍 What should my status say?")
+  .setLabel("What should my status say?")
   .setStyle(TextInputStyle.Short)
-  .setPlaceholder("(e.g.) Watching the sunset 🌅")
+  .setPlaceholder("Watching the sunset 🌅")
   .setRequired(true);
 
 modal.addComponents(new ActionRowBuilder().addComponents(input));
@@ -64,4 +62,5 @@ await interaction.showModal(modal);
     }
   },
 };
+
 
