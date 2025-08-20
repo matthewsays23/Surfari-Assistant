@@ -39,7 +39,7 @@ module.exports = {
       .setDescription("Tap the button below to verify on Surfari and sync your roles.")
       .setFooter({
         text: "Surfari.io • 2025",
-        iconURL: "https://i.imgur.com/hTentw2.png",
+        iconURL: "https://i.imgur.com/Q2KRVBO.png",
       });
 
     const row = new ActionRowBuilder().addComponents(
