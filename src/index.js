@@ -51,7 +51,7 @@ const express = require("express");
 const app = express();
 app.use(express.json());
 
-const webhookRouter = require("./webhook")(client);
+const webhookRouter = require("../bot/webhook")(client);
 app.use("/webhook", webhookRouter);
 
 const port = process.env.PORT || 8080;
