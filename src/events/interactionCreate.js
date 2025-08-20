@@ -16,33 +16,43 @@ module.exports = {
         if (interaction.customId === "status-type") {
           const activityType = parseInt(interaction.values[0]);
 
-          // Show modal for custom status text
-          const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require("discord.js");
-          const modal = new ModalBuilder()
-            .setCustomId(`status-modal-${activityType}`)
-            .setTitle("Set Bot Status");
+          // inside if (interaction.isStringSelectMenu())
+const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder } = require("discord.js");
 
-          const input = new TextInputBuilder()
-            .setCustomId("status-text")
-            .setLabel("Enter status text")
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder("e.g. Playing Roblox")
-            .setRequired(true);
+const modal = new ModalBuilder()
+  .setCustomId(`status-modal-${activityType}`)
+  .setTitle("🌸 Let's Finish Up!");
 
-          modal.addComponents(new ActionRowBuilder().addComponents(input));
-          return interaction.showModal(modal);
+const input = new TextInputBuilder()
+  .setCustomId("status-text")
+  .setLabel("🍍 What should my status say?")
+  .setStyle(TextInputStyle.Short)
+  .setPlaceholder("(e.g.) Watching the sunset 🌅")
+  .setRequired(true);
+
+modal.addComponents(new ActionRowBuilder().addComponents(input));
+await interaction.showModal(modal);
         }
       }
 
       // 🔹 Modal Submit Handler
       else if (interaction.isModalSubmit()) {
-        if (interaction.customId.startsWith("status-modal-")) {
-          const activityType = parseInt(interaction.customId.split("-")[2]);
-          const statusText = interaction.fields.getTextInputValue("status-text");
+        if (interaction.isModalSubmit() && interaction.customId.startsWith("status-modal-")) {
+  const activityType = parseInt(interaction.customId.split("-")[2]);
+  const statusText = interaction.fields.getTextInputValue("status-text");
 
-          client.user.setActivity(statusText, { type: activityType });
-          return interaction.reply({ content: `✅ Status set to: **${statusText}**`, ephemeral: true });
-        }
+  client.user.setActivity(statusText, { type: activityType });
+
+          const username = interaction.user.globalName || interaction.user.username;
+          
+  const confirmEmbed = new EmbedBuilder()
+    .setColor("#81b46b")
+    .setTitle(`🏄 Nice, ${username}! Loving the vibe change!`)
+    .setDescription(`Successfully sent log to set website! \n\nFeed: **${statusText}**!`)
+    .setFooter({ text: "Surfari.io · 2025", iconURL: "https://i.imgur.com/Q2KRVBO.png" })
+
+  await interaction.reply({ embeds: [confirmEmbed], ephemeral: true });
+}
       }
     } catch (error) {
       console.error(error);
@@ -54,3 +64,4 @@ module.exports = {
     }
   },
 };
+
