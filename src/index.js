@@ -45,19 +45,6 @@ const commandFolders = fs.readdirSync("./src/commands");
 
   client.login(token);
 
-  
-// after client.login(...)
-const express = require("express");
-const app = express();
-app.use(express.json());
-
-const webhookRouter = require("../bot/webhook")(client);
-app.use("/webhook", webhookRouter);
-
-const port = process.env.PORT || 8080;
-app.listen(port, () => console.log(`Bot webhook listening on ${port}`));
-
-
 })();
 
 

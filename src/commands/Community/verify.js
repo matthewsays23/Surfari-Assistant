@@ -1,10 +1,23 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+// src/commands/Community/verify.js
+const {
+  SlashCommandBuilder,
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+} = require("discord.js");
 const crypto = require("crypto");
 
 function makeState(discordId) {
-  return crypto.createHash("sha256")
-    .update(discordId + process.env.STATE_SECRET)
-    .digest("hex") + "." + discordId;
+  // signed state = <sha256>.<discordId>
+  return (
+    crypto
+      .createHash("sha256")
+      .update(discordId + process.env.STATE_SECRET)
+      .digest("hex") +
+    "." +
+    discordId
+  );
 }
 
 module.exports = {
@@ -14,17 +27,29 @@ module.exports = {
     .setDMPermission(true),
 
   async execute(interaction) {
+    const username = interaction.user.globalName || interaction.user.username;
     const state = makeState(interaction.user.id);
-    const url = `${process.env.WEB_BASE_URL}/auth/roblox?state=${encodeURIComponent(state)}`;
-const username = interaction.user.globalName || interaction.user.username;
+    const url = `${process.env.WEB_BASE_URL}/auth/roblox?state=${encodeURIComponent(
+      state
+    )}`;
 
     const embed = new EmbedBuilder()
       .setColor("#81b46b")
-      .setTitle(`🏄 Let's get you verified, ${username}!`)
-      .setDescription("Tap the link to verify your Roblox account and sync your roles.")
-      .setFooter({ text: "Surfari.io · 2025", iconURL: "https://i.imgur.com/Q2KRVBO.png" })
+      .setTitle(`🏄 Nice, ${username}! Let’s get you verified!`)
+      .setDescription("Tap the button below to verify on Surfari and sync your roles.")
+      .setFooter({
+        text: "Surfari.io • 2025",
+        iconURL: "https://i.imgur.com/hTentw2.png",
+      });
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
-    await interaction.followUp({ content: `🌺 **Verify here:** ${url}`, ephemeral: true });
-  }
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setLabel("Verify")
+        .setStyle(ButtonStyle.Link)
+        .setURL(url)
+        .setEmoji("🔒")
+    );
+
+    await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+  },
 };
