@@ -19,7 +19,7 @@ module.exports = {
 
 const modal = new ModalBuilder()
   .setCustomId(`status-modal-${activityType}`)
-  .setTitle("Almost There! 🐠");
+  .setTitle("Let's Finish Up");
 
 const input = new TextInputBuilder()
   .setCustomId("status-text")
@@ -62,5 +62,6 @@ await interaction.showModal(modal);
     }
   },
 };
+
 
 
