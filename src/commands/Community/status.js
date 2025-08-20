@@ -26,19 +26,19 @@ module.exports = {
       .setPlaceholder("☀️ Choose the vibe")
       .addOptions(
         new StringSelectMenuOptionBuilder()
-          .setLabel("☀️ Playing")
+          .setLabel("Playing")
           .setValue("0"), // 0 = Playing
         new StringSelectMenuOptionBuilder()
-          .setLabel("🎥 Streaming")
+          .setLabel("Streaming")
           .setValue("1"), // 1 = Streaming
         new StringSelectMenuOptionBuilder()
-          .setLabel("🎶 Listening")
+          .setLabel("Listening")
           .setValue("2"), // 2 = Listening
         new StringSelectMenuOptionBuilder()
-          .setLabel("🌴 Watching")
+          .setLabel("Watching")
           .setValue("3"), // 3 = Watching
         new StringSelectMenuOptionBuilder()
-          .setLabel("🏆 Competing")
+          .setLabel("Competing")
           .setValue("5")  // 5 = Competing
       );
 
