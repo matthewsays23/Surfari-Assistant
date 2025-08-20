@@ -3,7 +3,7 @@ module.exports = {
     once: true,
     async execute(client) {
         console.log('Ready!');
-
+require("../webhook")(client);
         async function pickPresence () {
             const option = Math.floor(Math.random() * statusArray.length);
 
