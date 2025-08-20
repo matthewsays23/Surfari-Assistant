@@ -18,7 +18,7 @@ module.exports = {
       .setColor("#81b46b")
       .setTitle("🌸 Surfari Status Panel")
       .setDescription("Pick a status type below and set my vibe!")
-      .setFooter({ text: "Surfari Bot • Smooth tropical vibes 🥥", iconURL: "https://i.imgur.com/Q2KRVBO.png" })
+      .setFooter({ text: "Surfari.io", iconURL: "https://i.imgur.com/Q2KRVBO.png" })
 
     // Dropdown menu
     const select = new StringSelectMenuBuilder()
