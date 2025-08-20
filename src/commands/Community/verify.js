@@ -22,7 +22,6 @@ const username = interaction.user.globalName || interaction.user.username;
       .setColor("#81b46b")
       .setTitle(`🏄 Let's get you verified, ${username}!`)
       .setDescription("Tap the link to verify your Roblox account and sync your roles.")
-      .setThumbnail("https://i.imgur.com/hTentw2.png")
       .setFooter({ text: "Surfari.io · 2025", iconURL: "https://i.imgur.com/Q2KRVBO.png" })
 
     await interaction.reply({ embeds: [embed], ephemeral: true });
