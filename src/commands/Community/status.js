@@ -10,7 +10,7 @@ const {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("status")
-    .setDescription("🌴 Set Surfari's bot status.."),
+    .setDescription("(Change Status)"),
 
   async execute(interaction) {
     // Tropical-themed embed
@@ -18,7 +18,7 @@ module.exports = {
       .setColor("#81b46b")
       .setTitle("🌸 Surfari Status Panel")
       .setDescription("Pick a status type below and set my vibe!")
-      .setFooter({ text: "Surfers Island 🌺" });
+      .setFooter({ text: "Surfari.io ©️ 2025" });
 
     // Dropdown menu
     const select = new StringSelectMenuBuilder()
