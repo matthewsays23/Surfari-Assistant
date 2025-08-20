@@ -16,9 +16,9 @@ module.exports = {
     // Tropical-themed embed
     const embed = new EmbedBuilder()
       .setColor("#81b46b")
-      .setTitle("🌸 Surfari Status Panel")
+      .setTitle("🏄 Ready to change the vibe?")
       .setDescription("Pick a status type below and set my vibe!")
-      .setFooter({ text: "Surfari.io", iconURL: "https://i.imgur.com/Q2KRVBO.png" })
+      .setFooter({ text: "Surfari.io · 2025", iconURL: "https://i.imgur.com/Q2KRVBO.png" })
 
     // Dropdown menu
     const select = new StringSelectMenuBuilder()
