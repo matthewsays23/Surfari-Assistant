@@ -12,6 +12,7 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setColor('81b46b')
       .setTitle(':ping_pong: Pong!')
+      .setFooter({ text: "Surfari.io · 2025", iconURL: "https://i.imgur.com/Q2KRVBO.png" })
       .addFields(
         { name: 'Bot Latency', value: `${ping}ms`, inline: true },
         { name: 'API Latency', value: `${apiPing}ms`, inline: true }
@@ -38,6 +39,7 @@ module.exports = {
         const newEmbed = new EmbedBuilder()
           .setColor('81b46b')
           .setTitle(':ping_pong: Pong!')
+          .setFooter({ text: "Surfari.io · 2025", iconURL: "https://i.imgur.com/Q2KRVBO.png" })
           .addFields(
             { name: 'Bot Latency', value: `${newPing}ms`, inline: true },
             { name: 'API Latency', value: `${newApiPing}ms`, inline: true }
