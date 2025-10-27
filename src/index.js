@@ -1,17 +1,21 @@
 // src/index.js
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
-
+const fs = require('fs');               // <-- missing in your file
 const path = require('path');
 const { MongoClient } = require('mongodb');
 require('dotenv').config();
 
-const TOKEN = process.env.DISCORD_TOKEN;
-const MONGO_URL = process.env.MONGO_URL;
-const DB_NAME = process.env.MONGO_DB || 'surfari';
-const PORT = process.env.PORT || 3000;
+// Optional: surface hidden crashes
+process.on('unhandledRejection', (r) => console.error('UnhandledRejection:', r));
+process.on('uncaughtException', (e) => console.error('UncaughtException:', e));
 
-if (!TOKEN) { console.error('❌ DISCORD_TOKEN missing'); process.exit(1); }
-if (!MONGO_URL) { console.error('❌ MONGO_URL missing'); process.exit(1); }
+const TOKEN     = process.env.DISCORD_TOKEN;
+const MONGO_URL = process.env.MONGO_URL;
+const DB_NAME   = process.env.MONGO_DB || 'surfari';
+const PORT      = process.env.PORT || 3000;
+
+if (!TOKEN)     { console.error('❌ DISCORD_TOKEN missing');  process.exit(1); }
+if (!MONGO_URL) { console.error('❌ MONGO_URL missing');      process.exit(1); }
 
 const client = new Client({
   intents: [
@@ -23,9 +27,9 @@ const client = new Client({
 });
 client.commands = new Collection();
 
-const ROOT = __dirname; // this file is in src/
+const ROOT         = __dirname; // this file is in src/
 const COMMANDS_DIR = path.join(ROOT, 'commands');
-const EVENTS_DIR = path.join(ROOT, 'events');
+const EVENTS_DIR   = path.join(ROOT, 'events');
 
 function loadEvents(dir) {
   if (!fs.existsSync(dir)) return;
@@ -70,46 +74,50 @@ function loadCommands(dir) {
   }
 }
 
-async function registerGuildCommands(client) {
-  const CLIENT_ID = process.env.DISCORD_CLIENT_ID; // your Discord Application ID
-  const GUILD_ID  = process.env.GUILD_ID;          // the server where you expect the commands
-
+async function registerGuildCommands() {
+  const CLIENT_ID = process.env.DISCORD_CLIENT_ID; // Application ID
+  const GUILD_ID  = process.env.GUILD_ID;          // target server
   if (!CLIENT_ID || !GUILD_ID) {
     console.error('❌ Missing DISCORD_CLIENT_ID or GUILD_ID for command registration');
     return;
   }
-
-  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+  const rest = new REST({ version: '10' }).setToken(TOKEN);
   const body = [...client.commands.values()].map(c => c.data.toJSON());
-
   console.log(`📝 Registering ${body.length} guild commands to ${GUILD_ID}...`);
   await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body });
   console.log('✅ Guild commands registered.');
 }
 
-
 (async () => {
-  // Mongo
+  // --- Mongo ---
+  console.log('📦 Connecting to Mongo…');
   const mongo = await MongoClient.connect(MONGO_URL);
   const db = mongo.db(DB_NAME);
   client.db = db;
+  console.log('✅ Mongo connected. DB:', DB_NAME);
 
-  // Webhook server
+  // --- Webhook server (Express app exported from src/server.js) ---
   const createWebhookServer = require(path.join(ROOT, 'server.js'));
   const app = createWebhookServer({ client, db });
   app.get('/health', (_req, res) => res.json({ ok: true }));
   app.listen(PORT, () => console.log(`🌐 Webhook listening on :${PORT}`));
 
-  // Load everything
+  // --- Load events/commands ---
   loadEvents(EVENTS_DIR);
   loadCommands(COMMANDS_DIR);
 
+  // --- Discord login & register commands ---
   client.once('ready', async () => {
-  console.log(`🤖 Logged in as ${client.user.tag}`);
-  try {
-    await registerGuildCommands(client);
-  } catch (e) {
-    console.error('Command registration failed:', e);
-  }
-})
+    console.log(`🤖 Logged in as ${client.user.tag}`);
+    try {
+      await registerGuildCommands();
+    } catch (e) {
+      console.error('Command registration failed:', e);
+    }
+  });
+
+  await client.login(TOKEN);        // <-- this was missing
+})().catch((err) => {
+  console.error('Startup error:', err);
+  process.exit(1);
 });
