@@ -70,23 +70,6 @@ function loadCommands(dir) {
   }
 }
 
-// Basic interaction handler (if you don't already have one in /events)
-client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-  const command = client.commands.get(interaction.commandName);
-  if (!command) return;
-  try {
-    await command.execute(interaction);
-  } catch (e) {
-    console.error(e);
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ content: 'Command error.' });
-    } else {
-      await interaction.reply({ content: 'Command error.', ephemeral: true });
-    }
-  }
-});
-
 (async () => {
   // Mongo
   const mongo = await MongoClient.connect(MONGO_URL);
