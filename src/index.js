@@ -1,6 +1,6 @@
 // src/index.js
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
-const fs = require('fs');
+const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
+
 const path = require('path');
 const { MongoClient } = require('mongodb');
 require('dotenv').config();
@@ -70,6 +70,24 @@ function loadCommands(dir) {
   }
 }
 
+async function registerGuildCommands(client) {
+  const CLIENT_ID = process.env.DISCORD_CLIENT_ID; // your Discord Application ID
+  const GUILD_ID  = process.env.GUILD_ID;          // the server where you expect the commands
+
+  if (!CLIENT_ID || !GUILD_ID) {
+    console.error('❌ Missing DISCORD_CLIENT_ID or GUILD_ID for command registration');
+    return;
+  }
+
+  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+  const body = [...client.commands.values()].map(c => c.data.toJSON());
+
+  console.log(`📝 Registering ${body.length} guild commands to ${GUILD_ID}...`);
+  await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body });
+  console.log('✅ Guild commands registered.');
+}
+
+
 (async () => {
   // Mongo
   const mongo = await MongoClient.connect(MONGO_URL);
@@ -86,9 +104,12 @@ function loadCommands(dir) {
   loadEvents(EVENTS_DIR);
   loadCommands(COMMANDS_DIR);
 
-  client.once('ready', () => console.log(`🤖 Logged in as ${client.user.tag}`));
-  await client.login(TOKEN);
-})().catch((err) => {
-  console.error('Startup error:', err);
-  process.exit(1);
+  client.once('ready', async () => {
+  console.log(`🤖 Logged in as ${client.user.tag}`);
+  try {
+    await registerGuildCommands(client);
+  } catch (e) {
+    console.error('Command registration failed:', e);
+  }
+})
 });
