@@ -117,18 +117,6 @@ async function registerGuildCommands() {
     }
   });
 
-
-
-const { handleVerify } = require("./commands/Community/verify.js");
-
-client.on("interactionCreate", async (interaction) => {
-  try {
-    await handleVerify(interaction); // handles only the /verify command
-  } catch (err) {
-    console.error("Verify command error:", err);
-  }
-});
-
   await client.login(TOKEN);        // <-- this was missing
 })().catch((err) => {
   console.error('Startup error:', err);
