@@ -1,197 +1,163 @@
-// backend/routes/auth.js
-import express from "express";
-import axios from "axios";
-import crypto from "crypto";
-import cookieParser from "cookie-parser";
-import { getDb } from "../db.js";
+// src/server.js
+const express = require('express');
+const crypto  = require('crypto');
 
-const router = express.Router();
-router.use(cookieParser());
+module.exports = function createWebhookServer({ client, db }) {
+  const app = express();
+  app.use(express.json({ limit: '256kb' }));
 
-// ENV (consistent names)
-const SURFARI_GROUP_ID     = parseInt(process.env.SURFARI_GROUP_ID || "0", 10);
-const BOT_URL              = process.env.BOT_URL;
-const WEBHOOK_SECRET       = process.env.SURFARI_WEBHOOK_SECRET || "";
-const STATE_SECRET         = process.env.STATE_SECRET;
-const ROBLOX_CLIENT_ID     = process.env.ROBLOX_CLIENT_ID;
-const ROBLOX_CLIENT_SECRET = process.env.ROBLOX_CLIENT_SECRET;
-const ROBLOX_REDIRECT_URI  = process.env.ROBLOX_REDIRECT_URI; // EXACT: https://surfari.onrender.com/auth/callback
-const FALLBACK_GUILD_ID    = process.env.GUILD_ID;            // used if old state has no guild
+  // ---- ENV ----
+  const STATE_SECRET       = process.env.STATE_SECRET;
+  const WEBHOOK_SECRET     = process.env.SURFARI_WEBHOOK_SECRET;   // optional but recommended
+  const GUILD_ID           = process.env.GUILD_ID;
+  const VERIFIED_ROLE_ID   = process.env.VERIFIED_ROLE_ID;
+  const SURFARI_GROUP_ID   = String(process.env.SURFARI_GROUP_ID || '');
+  const ROLE_MAP           = JSON.parse(process.env.ROLE_MAP_JSON || '{}'); // e.g. {"255":"<OwnerRoleID>","200":"<AdminRoleID>","0":"<MemberRoleID>"} or {"Lifeguard":"<id>"}
 
-// --- accept both state formats ---
-function parseStateFlexible(state) {
-  if (!state || !STATE_SECRET) return null;
-  const parts = String(state).split(".");
+  if (!GUILD_ID) console.warn("[server] GUILD_ID not set; state fallback requires it");
+  if (!STATE_SECRET) console.warn("[server] STATE_SECRET not set; state cannot be verified");
+  console.log("[server] Role map keys:", Object.keys(ROLE_MAP));
 
-  // NEW: "<payloadB64url>.<sigB64url>", payload = { d, g, t, v }
-  if (parts.length === 2) {
-    const [payloadB64, sigB64] = parts;
-    const calc = crypto.createHmac("sha256", STATE_SECRET).update(payloadB64).digest("base64url");
-    if (calc !== sigB64) return null;
-    try {
-      const obj = JSON.parse(Buffer.from(payloadB64, "base64url").toString("utf8"));
-      if (!obj?.d) return null;
-      if (obj?.t && Date.now() > obj.t) return null;
+  // ---- helpers ----
+  function safeHmacBase64(secret, payload) {
+    return crypto.createHmac('sha256', secret).update(payload).digest('base64');
+  }
+
+  function safeHmacBase64Url(secret, payload) {
+    return crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+  }
+
+  function verifyOptionalWebhookSignature(rawBody, givenB64) {
+    if (!WEBHOOK_SECRET) return true;              // not enforced
+    if (!givenB64) return false;
+    const calc = safeHmacBase64(WEBHOOK_SECRET, rawBody);
+    // timingSafeEqual throws if lengths differ; guard first:
+    if (calc.length !== givenB64.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(calc), Buffer.from(givenB64));
+  }
+
+  /**
+   * Accept BOTH state formats:
+   *  A) NEW: "<payloadB64url>.<sigB64url>", payload = { d, g, t, v }
+   *  B) OLD: "<hashHex>.<discordId>.<tsMs>", where hashHex = HMAC( `${discordId}.${ts}` ) in hex
+   * Returns: { d, g?, t?, v }
+   */
+  function parseAndValidateStateFlexible(state) {
+    if (!state || !STATE_SECRET) throw new Error('state missing');
+    const parts = String(state).split('.');
+
+    // NEW format
+    if (parts.length === 2) {
+      const [payloadB64, sigB64] = parts;
+      const calc = safeHmacBase64Url(STATE_SECRET, payloadB64);
+      if (sigB64 !== calc) throw new Error('bad state signature');
+      let obj;
+      try {
+        obj = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+      } catch {
+        throw new Error('invalid state payload');
+      }
+      if (!obj?.d) throw new Error('invalid state (no discord id)');
+      if (obj?.t && Date.now() > obj.t) throw new Error('state expired');
       return { d: obj.d, g: obj.g, t: obj.t, v: obj.v ?? 2 };
-    } catch { return null; }
+    }
+
+    // OLD format
+    if (parts.length === 3) {
+      const [hashHex, discordId, tsStr] = parts;
+      const body = `${discordId}.${tsStr}`;
+      const calcHex = crypto.createHmac('sha256', STATE_SECRET).update(body).digest('hex');
+      if (hashHex !== calcHex) throw new Error('bad state signature');
+      const ts = Number(tsStr);
+      if (Number.isFinite(ts) && Date.now() - ts > 10 * 60 * 1000) throw new Error('state expired');
+      return { d: discordId, t: ts, v: 1 }; // no g in v1; we'll fallback to env GUILD_ID
+    }
+
+    throw new Error('invalid state format');
   }
 
-  // OLD: "hashHex.discordId.ts"
-  if (parts.length === 3) {
-    const [hashHex, discordId, tsStr] = parts;
-    const body  = `${discordId}.${tsStr}`;
-    const calcH = crypto.createHmac("sha256", STATE_SECRET).update(body).digest("hex");
-    if (calcH !== hashHex) return null;
-    const ts = Number(tsStr);
-    if (Number.isFinite(ts) && Date.now() - ts > 10 * 60 * 1000) return null;
-    return { d: discordId, t: ts, v: 1 }; // no guild → use fallback
-  }
-  return null;
-}
-
-// HMAC header for bot webhook (optional but recommended)
-function signForBot(body) {
-  if (!WEBHOOK_SECRET) return "";
-  return crypto.createHmac("sha256", WEBHOOK_SECRET).update(JSON.stringify(body)).digest("base64");
-}
-
-// --- /roblox: set cookie + forward state to Roblox ---
-router.get("/roblox", (req, res) => {
-  const { state } = req.query;
-  if (!state) return res.status(400).send("Missing state");
-
-  if (!ROBLOX_CLIENT_ID || !ROBLOX_REDIRECT_URI) {
-    console.error("Missing ROBLOX_CLIENT_ID or ROBLOX_REDIRECT_URI");
-    return res.status(500).send("Server misconfigured");
+  function pickDiscordRoleIdForMapping(roleRankOrName) {
+    // Accept numeric rank (stringified) or roleName
+    const key = String(roleRankOrName);
+    return ROLE_MAP[key] || null;
   }
 
-  res.cookie("rs", state, { httpOnly: true, sameSite: "lax", secure: true, maxAge: 10 * 60 * 1000 });
+  app.post('/api/discord/verify', async (req, res) => {
+    try {
+      if (!STATE_SECRET) throw new Error('STATE_SECRET not set');
+      if (!GUILD_ID) throw new Error('GUILD_ID not set');
 
-  const scope = "openid profile";
-  const url =
-    `https://apis.roblox.com/oauth/v1/authorize` +
-    `?client_id=${encodeURIComponent(ROBLOX_CLIENT_ID)}` +
-    `&response_type=code` +
-    `&redirect_uri=${encodeURIComponent(ROBLOX_REDIRECT_URI)}` +
-    `&scope=${encodeURIComponent(scope)}` +
-    `&state=${encodeURIComponent(state)}`;
+      // Optional HMAC from website
+      const raw = JSON.stringify(req.body || {});
+      const given = req.get('x-surfari-signature') || '';
+      if (!verifyOptionalWebhookSignature(raw, given)) {
+        return res.status(401).json({ error: 'bad signature' });
+      }
 
-  console.log("Authorize URL ->", {
-    clientIdPrefix: ROBLOX_CLIENT_ID.slice(0, 6),
-    redirectUri: ROBLOX_REDIRECT_URI,
-    statePreview: String(state).slice(0, 12) + "...",
+      const { state, robloxId, username, displayName, roles } = req.body || {};
+      if (!state || !robloxId || !username) return res.status(400).json({ error: 'missing fields' });
+
+      // Accept both state formats; allow env fallback for guild
+      const st = parseAndValidateStateFlexible(state); // may not include g if old format
+      const guildId = st.g || GUILD_ID;
+
+      const guild = await client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(st.d);
+
+      // ----- persist link -----
+      await db.collection('links').updateOne(
+        { discordId: st.d, guildId },
+        {
+          $set: {
+            discordId: st.d,
+            guildId,
+            robloxId: String(robloxId),
+            username,
+            displayName: displayName || username,
+            linkedAt: new Date(),
+            lastSyncAt: new Date(),
+          },
+        },
+        { upsert: true }
+      );
+
+      // ----- nickname -----
+      const nick = (displayName || username || '').slice(0, 32);
+      try { if (nick) await member.setNickname(nick, 'Surfari verification'); } catch { /* ignore (permissions/role order) */ }
+
+      // ----- role mapping -----
+      // Expect roles from website like: [{ groupId, roleId, roleName }]
+      const toAdd = new Set();
+      if (VERIFIED_ROLE_ID) toAdd.add(VERIFIED_ROLE_ID);
+
+      const surfariRoles = Array.isArray(roles)
+        ? roles.filter(r => String(r.groupId) === SURFARI_GROUP_ID)
+        : [];
+
+      for (const r of surfariRoles) {
+        // We allow mapping by rank (roleId from payload carries rank) OR by name
+        const mapped =
+          pickDiscordRoleIdForMapping(String(r.roleId)) ||
+          pickDiscordRoleIdForMapping(r.roleName);
+        if (mapped) toAdd.add(mapped);
+      }
+
+      // Optional: remove prior Surfari-mapped roles first (prevents multiple rank roles)
+      const mappedRoleIds = Object.values(ROLE_MAP);
+      const rolesToRemove = member.roles.cache.filter(r => mappedRoleIds.includes(r.id));
+      if (rolesToRemove.size) {
+        await member.roles.remove(rolesToRemove, 'Surfari rank remap');
+      }
+
+      const addList = [...toAdd].filter(id => !member.roles.cache.has(id));
+      if (addList.length) await member.roles.add(addList, 'Surfari role sync');
+
+      return res.json({ ok: true, discordId: st.d, appliedRoles: [...toAdd] });
+    } catch (e) {
+      console.error('/api/discord/verify', e);
+      return res.status(400).json({ error: e.message || 'error' });
+    }
   });
 
-  res.redirect(url);
-});
-
-// --- /callback: exchange token, read user, save link, notify bot ---
-router.get("/callback", async (req, res) => {
-  try {
-    const { code }   = req.query;
-    const rawState   = req.cookies?.rs;
-    if (!code) return res.status(400).send("Missing code");
-
-    const st = parseStateFlexible(rawState);
-    const guildId = st?.g || FALLBACK_GUILD_ID; // fallback for old state
-    if (!st?.d)       return res.status(400).send("Invalid or missing state");
-    if (!guildId)     return res.status(400).send("Missing guild context");
-
-    // Token exchange (HTTP Basic)
-    const basic = Buffer.from(`${ROBLOX_CLIENT_ID}:${ROBLOX_CLIENT_SECRET}`).toString("base64");
-    const tokenResp = await axios.post(
-      "https://apis.roblox.com/oauth/v1/token",
-      new URLSearchParams({
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: ROBLOX_REDIRECT_URI, // consistent name
-      }),
-      {
-        headers: {
-          Authorization: `Basic ${basic}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        validateStatus: () => true,
-      }
-    );
-    if (tokenResp.status !== 200) {
-      console.error("TOKEN ERROR:", tokenResp.status, tokenResp.data);
-      return res.status(500).send("Token exchange failed");
-    }
-    const { access_token } = tokenResp.data;
-
-    // Userinfo
-    const meResp = await axios.get("https://apis.roblox.com/oauth/v1/userinfo", {
-      headers: { Authorization: `Bearer ${access_token}` },
-      validateStatus: () => true,
-    });
-    if (meResp.status !== 200) {
-      console.error("USERINFO ERROR:", meResp.status, meResp.data);
-      return res.status(500).send("User info failed");
-    }
-    const me = meResp.data;
-    const robloxUserId  = Number(me.sub);
-    const robloxUsername= me.name || me.preferred_username || `Roblox_${me.sub}`;
-
-    // Group role
-    let roleRank = 0, roleName = "Guest";
-    if (SURFARI_GROUP_ID > 0) {
-      const rolesResp = await axios.get(
-        `https://groups.roblox.com/v2/users/${robloxUserId}/groups/roles`,
-        { validateStatus: () => true }
-      );
-      const entries = rolesResp.status === 200 ? (rolesResp.data?.data || []) : [];
-      const sg = entries.find(g => g.group?.id === SURFARI_GROUP_ID);
-      roleRank = sg?.role?.rank ?? 0;
-      roleName = sg?.role?.name ?? "Guest";
-    }
-
-    // Persist link
-    const db = getDb();
-    await db.collection("links").updateOne(
-      { discordId: st.d, guildId },
-      {
-        $set: {
-          discordId: st.d,
-          guildId,
-          robloxUserId,
-          robloxUsername,
-          roleRank,
-          roleName,
-          verifiedAt: new Date(),
-          lastSyncAt: new Date(),
-        },
-      },
-      { upsert: true }
-    );
-
-    // Notify bot
-    if (BOT_URL) {
-      const payload = {
-        state: rawState, // bot parses/validates too
-        robloxId: robloxUserId,
-        username: robloxUsername,
-        displayName: robloxUsername,
-        roles: [{ groupId: SURFARI_GROUP_ID, roleId: roleRank, roleName }],
-      };
-      const sig = signForBot(payload);
-      try {
-        await axios.post(`${BOT_URL}/api/discord/verify`, payload, {
-          headers: sig ? { "x-surfari-signature": sig } : {},
-          timeout: 8000,
-        });
-      } catch (e) {
-        console.warn("Bot sync warning:", e.response?.status, e.response?.data || e.message);
-      }
-    }
-
-    res.clearCookie("rs");
-    res.send(`<html><body style="text-align:center;padding-top:20vh;font-family:sans-serif;">
-      <h1>✅ Verified!</h1><p>You may now close this tab and return to Discord.</p></body></html>`);
-  } catch (err) {
-    console.error("Auth callback error:", err.response?.data || err);
-    res.status(500).send("OAuth callback failed");
-  }
-});
-
-export default router;
+  return app;
+};
