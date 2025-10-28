@@ -119,7 +119,7 @@ async function registerGuildCommands() {
 
 
 
-const { handleVerify } = require("./verify-command.js");
+const { handleVerify } = require("./commands/verify-command.js");
 
 client.on("interactionCreate", async (interaction) => {
   try {
