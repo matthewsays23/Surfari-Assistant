@@ -27,6 +27,7 @@ const client = new Client({
 });
 client.commands = new Collection();
 
+
 const ROOT         = __dirname; // this file is in src/
 const COMMANDS_DIR = path.join(ROOT, 'commands');
 const EVENTS_DIR   = path.join(ROOT, 'events');
@@ -115,6 +116,18 @@ async function registerGuildCommands() {
       console.error('Command registration failed:', e);
     }
   });
+
+
+
+const { handleVerify } = require("./verify-command.js");
+
+client.on("interactionCreate", async (interaction) => {
+  try {
+    await handleVerify(interaction); // handles only the /verify command
+  } catch (err) {
+    console.error("Verify command error:", err);
+  }
+});
 
   await client.login(TOKEN);        // <-- this was missing
 })().catch((err) => {
