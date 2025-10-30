@@ -26,8 +26,8 @@ module.exports = {
     const authUrl = `${process.env.SURFARI_BASE_URL}/auth/roblox?state=${encodeURIComponent(state)}`;
 
     const embed = new EmbedBuilder()
-      .setColor(0xFF6A00)
-      .setTitle("🪸 Surfari Verification")
+      .setColor("81b46b")
+      .setTitle("🏄 Surfari Verification")
       .setDescription(
         "**Connect your Roblox account** to unlock Surfari roles.\n\n" +
         "🔒 _Secure Roblox OAuth — we never see your password_"
