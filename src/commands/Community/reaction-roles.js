@@ -1,21 +1,18 @@
 // src/commands/Community/reaction-roles.js
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 function parseEmojiKey(emojiTextOrObj) {
-  // Accepts unicode, custom reaction object, or string like "<:name:123>" / "<a:name:123>"
+  // custom emoji -> id, unicode -> char/name
   if (emojiTextOrObj && typeof emojiTextOrObj === 'object') {
-    if (emojiTextOrObj.id) return emojiTextOrObj.id;     // custom emoji id
-    if (emojiTextOrObj.name) return emojiTextOrObj.name; // unicode
+    return emojiTextOrObj.id ? emojiTextOrObj.id : emojiTextOrObj.name || null;
   }
   const s = String(emojiTextOrObj).trim();
-  const m = s.match(/^<a?:\w+:(\d+)>$/); // custom emoji ID
-  return m ? m[1] : s; // unicode char or raw
+  const m = s.match(/^<a?:\w+:(\d+)>$/);
+  return m ? m[1] : s;
 }
-
 function isCustomEmojiString(s) {
   return /^<a?:\w+:(\d+)>$/.test(String(s).trim());
 }
-
 function extractCustomId(s) {
   const m = String(s).trim().match(/^<a?:\w+:(\d+)>$/);
   return m ? m[1] : null;
@@ -24,23 +21,27 @@ function extractCustomId(s) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('rr')
-    .setDescription('Reaction roles')
+    .setDescription('Reaction roles (bind to an existing message)')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand(sub =>
-      sub.setName('create')
-        .setDescription('Create a reaction-roles message')
-        .addChannelOption(o => o.setName('channel').setDescription('Target channel').setRequired(true))
-        .addStringOption(o => o.setName('title').setDescription('Embed title').setRequired(true))
-        .addStringOption(o => o.setName('description').setDescription('Embed description').setRequired(true))
+      sub.setName('bind')
+        .setDescription('Bind reaction roles to an existing message')
+        .addChannelOption(o => o.setName('channel').setDescription('Channel of the message').setRequired(true))
+        .addStringOption(o => o.setName('message_id').setDescription('Target message ID').setRequired(true))
         .addStringOption(o =>
           o.setName('mappings')
-           .setDescription('One per line: EMOJI = @Role (or RoleID)')
-           .setRequired(true)
+            .setDescription('One per line: EMOJI = @Role (or RoleID)')
+            .setRequired(true)
+        )
+        .addBooleanOption(o =>
+          o.setName('clear')
+            .setDescription('Clear all reactions on the message before binding (default: false)')
+            .setRequired(false)
         )
     )
     .addSubcommand(sub =>
       sub.setName('delete')
-        .setDescription('Delete a reaction-roles config by message ID')
+        .setDescription('Delete reaction-roles config by message ID')
         .addStringOption(o => o.setName('message_id').setDescription('Message ID').setRequired(true))
     ),
 
@@ -49,15 +50,15 @@ module.exports = {
     const db = interaction.client.db;
     const coll = db.collection('reactionRoles');
 
-    if (sub === 'create') {
-      const channel      = interaction.options.getChannel('channel', true);
-      const title        = interaction.options.getString('title', true);
-      const description  = interaction.options.getString('description', true);
-      const mappingsText = interaction.options.getString('mappings', true);
+    if (sub === 'bind') {
+      const channel   = interaction.options.getChannel('channel', true);
+      const messageId = interaction.options.getString('message_id', true);
+      const text      = interaction.options.getString('mappings', true);
+      const doClear   = interaction.options.getBoolean('clear') || false;
 
       const me = await interaction.guild.members.fetchMe();
-      const need = ['ManageRoles', 'SendMessages', 'AddReactions', 'ReadMessageHistory', 'ViewChannel'];
-      const missing = need.filter(p => !channel.permissionsFor(me).has(p));
+      const need = ['ViewChannel','ReadMessageHistory','AddReactions','SendMessages'];
+      const missing = need.filter(p => !channel.permissionsFor(me)?.has(p));
       if (missing.length) {
         return interaction.reply({ ephemeral: true, content: `I’m missing permissions in ${channel}: **${missing.join(', ')}**` });
       }
@@ -65,7 +66,18 @@ module.exports = {
         return interaction.reply({ ephemeral: true, content: 'I need the **Manage Roles** permission.' });
       }
 
-      const lines  = mappingsText.split('\n').map(l => l.trim()).filter(Boolean);
+      await interaction.deferReply({ ephemeral: true });
+
+      // Fetch the existing message
+      let msg;
+      try {
+        msg = await channel.messages.fetch(messageId);
+      } catch {
+        return interaction.editReply(`❌ I can’t fetch message \`${messageId}\` in ${channel}. Make sure the ID is correct and I can read history.`);
+      }
+
+      // Parse mappings
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
       const parsed = [];
       const errors = [];
 
@@ -76,7 +88,7 @@ module.exports = {
         const emojiRaw = parts[0].trim();
         const roleRaw  = parts[1].trim();
 
-        // Resolve role by mention, id, or name
+        // Resolve role by mention/id/name
         let roleId = roleRaw.replace(/[<@&>]/g, '');
         if (!/^\d{5,}$/.test(roleId)) {
           const byName = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === roleRaw.toLowerCase());
@@ -90,42 +102,37 @@ module.exports = {
           continue;
         }
 
-        let emojiForMessage = emojiRaw;           // what we react with
-        let emojiKey        = emojiRaw;           // how we store/compare
+        let emojiForMessage = emojiRaw;
+        let emojiKey        = emojiRaw;
         if (isCustomEmojiString(emojiRaw)) {
           const id = extractCustomId(emojiRaw);
-          emojiKey = id; // store custom by ID
+          emojiKey = id;       // store custom by ID
         } else {
-          // unicode stays as-is
-          emojiKey = emojiRaw;
+          emojiKey = emojiRaw; // unicode store raw
         }
 
         parsed.push({ emojiForMessage, emojiKey, roleId });
       }
 
       if (!parsed.length) {
-        return interaction.reply({ ephemeral: true, content: `No valid mappings.\n${errors.join('\n') || ''}` });
+        return interaction.editReply(`❌ No valid mappings.\n${errors.join('\n') || ''}`);
       }
 
-      await interaction.deferReply({ ephemeral: true });
+      // optional: clear reactions first
+      if (doClear) {
+        try { await msg.reactions.removeAll(); } catch {}
+      }
 
-      const embed = new EmbedBuilder()
-        .setTitle(title)
-        .setDescription(
-          `${description}\n\n` +
-          parsed.map(p => `${p.emojiForMessage} → <@&${p.roleId}>`).join('\n')
-        )
-        .setColor(0xF97316); // Surfari orange
-
-      const msg = await channel.send({ embeds: [embed] });
-
-      // add reactions
+      // React with each emoji on the existing message
       for (const p of parsed) {
-        try { await msg.react(p.emojiForMessage); }
-        catch (e) { errors.push(`Failed to react ${p.emojiForMessage}: ${e.message}`); }
+        try {
+          await msg.react(p.emojiForMessage);
+        } catch (e) {
+          errors.push(`Failed to react ${p.emojiForMessage}: ${e.message}`);
+        }
       }
 
-      // save config
+      // Save config
       await coll.updateOne(
         { guildId: interaction.guild.id, messageId: msg.id },
         {
@@ -141,9 +148,10 @@ module.exports = {
         { upsert: true }
       );
 
-      return interaction.editReply({
-        content: `✅ Reaction roles created in ${channel}. Message ID: \`${msg.id}\`${errors.length ? `\n\nWarnings:\n${errors.join('\n')}` : ''}`
-      });
+      return interaction.editReply(
+        `✅ Bound reaction roles to message \`${msg.id}\` in ${channel}.\n` +
+        (errors.length ? `\nWarnings:\n${errors.join('\n')}` : '')
+      );
     }
 
     if (sub === 'delete') {
@@ -152,12 +160,7 @@ module.exports = {
       if (!doc) return interaction.reply({ ephemeral: true, content: 'No config found for that message.' });
 
       await coll.deleteOne({ guildId: interaction.guild.id, messageId });
-      try {
-        const ch  = await interaction.client.channels.fetch(doc.channelId);
-        const msg = await ch.messages.fetch(doc.messageId);
-        await msg.delete().catch(() => {});
-      } catch {}
-      return interaction.reply({ ephemeral: true, content: '🗑️ Deleted reaction-roles config.' });
+      return interaction.reply({ ephemeral: true, content: '🗑️ Deleted reaction-roles config (message left untouched).' });
     }
   }
 };
