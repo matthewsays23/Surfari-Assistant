@@ -18,7 +18,7 @@ module.exports = {
       if (!message?.guild) return;
 
       const client = passedClient || reaction.client;
-      const store = client.reactionRoles;
+      const store  = client?.reactionRoles;
       if (!store) return;
 
       const cfg = store.get(message.id);

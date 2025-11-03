@@ -1,4 +1,3 @@
-// src/commands/Community/reaction-roles.js
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 function isCustomEmojiString(s) {
@@ -59,7 +58,6 @@ module.exports = {
 
       await interaction.deferReply({ ephemeral: true });
 
-      // Fetch existing message
       let msg;
       try {
         msg = await channel.messages.fetch(messageId);
@@ -67,7 +65,6 @@ module.exports = {
         return interaction.editReply(`❌ I can’t fetch message \`${messageId}\` in ${channel}.`);
       }
 
-      // Parse mappings
       const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
       const parsed = [];
       const errors = [];
@@ -79,17 +76,18 @@ module.exports = {
         const emojiRaw = parts[0].trim();
         const roleRaw  = parts[1].trim();
 
-        // Resolve role
+        // role resolve
         let roleId = roleRaw.replace(/[<@&>]/g, '');
         if (!/^\d{5,}$/.test(roleId)) {
           const byName = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === roleRaw.toLowerCase());
           if (!byName) { errors.push(`Role not found: "${roleRaw}"`); continue; }
           roleId = byName.id;
         }
+
         const role = interaction.guild.roles.cache.get(roleId);
         if (!role) { errors.push(`Invalid role: ${roleId}`); continue; }
         if (role.position >= me.roles.highest.position) {
-          errors.push(`Can’t assign **${role.name}** (higher/equal to my top role).`);
+          errors.push(`Can’t assign **${role.name}** (role is >= my highest role).`);
           continue;
         }
 
@@ -109,18 +107,15 @@ module.exports = {
         return interaction.editReply(`❌ No valid mappings.\n${errors.join('\n') || ''}`);
       }
 
-      // Optional: clear existing reactions
       if (doClear) {
         try { await msg.reactions.removeAll(); } catch {}
       }
 
-      // React with emojis
       for (const p of parsed) {
         try { await msg.react(p.emojiForMessage); }
         catch (e) { errors.push(`Failed to react ${p.emojiForMessage}: ${e.message}`); }
       }
 
-      // Build config object once
       const cfg = {
         guildId: interaction.guild.id,
         channelId: channel.id,
@@ -130,13 +125,14 @@ module.exports = {
         createdAt: new Date(),
       };
 
-      // ✅ store in memory for fast lookup
+      // 🔹 In-memory store
       if (!interaction.client.reactionRoles) {
         interaction.client.reactionRoles = new Map();
       }
       interaction.client.reactionRoles.set(msg.id, cfg);
+      console.log('RR BIND: saved config for message', msg.id, '->', cfg);
 
-      // (optional) still store in Mongo if you want persistence
+      // (optional) persist to Mongo
       await coll.updateOne(
         { guildId: cfg.guildId, messageId: cfg.messageId },
         { $set: cfg },
