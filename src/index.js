@@ -36,7 +36,7 @@ const client = new Client({
 });
 
 client.commands = new Collection();
-
+client.reactionRoles = new Map();client.reactionRoles = new Map();
 
 const ROOT         = __dirname; // this file is in src/
 const COMMANDS_DIR = path.join(ROOT, 'commands');
