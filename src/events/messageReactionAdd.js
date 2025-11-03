@@ -1,18 +1,19 @@
 const { Events } = require('discord.js');
 
 function emojiKey(emoji) {
+  // custom → id, unicode → char/name
   return emoji?.id ? emoji.id : emoji?.name || null;
 }
 
 module.exports = {
   name: Events.MessageReactionAdd,
-  async execute(reaction, user, passedClient) {
+  async execute(reaction, user /* client is ignored now */) {
     try {
       if (user?.bot) return;
 
       if (reaction?.partial) {
         try { await reaction.fetch(); } catch (e) {
-          console.warn('RR Add: failed to fetch partial reaction', e?.message);
+          console.warn('RR ADD: failed to fetch partial reaction', e?.message);
           return;
         }
       }
@@ -20,24 +21,30 @@ module.exports = {
       const message = reaction?.message;
       if (!message?.guild) return;
 
-      const client = passedClient || reaction.client;
-      const store  = client?.reactionRoles;
+      const db = global._surfariDb;
+      if (!db) {
+        console.warn('RR ADD: global db not ready');
+        return;
+      }
 
+      const coll = db.collection('reactionRoles');
+
+      // Debug: confirm the event is firing
       console.log('RR ADD fired', {
         guildId: message.guild.id,
         channelId: message.channel.id,
         messageId: message.id,
         userId: user.id,
         emoji: { id: reaction.emoji.id, name: reaction.emoji.name },
-        hasStore: !!store,
-        storeKeys: store ? [...store.keys()] : [],
       });
 
-      if (!store) return;
+      const cfg = await coll.findOne({
+        guildId: message.guild.id,
+        messageId: message.id,
+      });
 
-      const cfg = store.get(message.id);
       if (!cfg) {
-        console.log('RR ADD: no cfg for this messageId in store');
+        console.log('RR ADD: no config for this message');
         return;
       }
 
@@ -67,3 +74,4 @@ module.exports = {
     }
   },
 };
+

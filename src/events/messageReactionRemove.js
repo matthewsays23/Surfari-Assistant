@@ -6,22 +6,32 @@ function emojiKey(emoji) {
 
 module.exports = {
   name: Events.MessageReactionRemove,
-  async execute(reaction, user, passedClient) {
+  async execute(reaction, user /* client ignored */) {
     try {
       if (user?.bot) return;
 
       if (reaction?.partial) {
-        try { await reaction.fetch(); } catch { return; }
+        try { await reaction.fetch(); } catch (e) {
+          console.warn('RR REMOVE: failed to fetch partial reaction', e?.message);
+          return;
+        }
       }
 
       const message = reaction?.message;
       if (!message?.guild) return;
 
-      const client = passedClient || reaction.client;
-      const store  = client?.reactionRoles;
-      if (!store) return;
+      const db = global._surfariDb;
+      if (!db) {
+        console.warn('RR REMOVE: global db not ready');
+        return;
+      }
 
-      const cfg = store.get(message.id);
+      const coll = db.collection('reactionRoles');
+      const cfg = await coll.findOne({
+        guildId: message.guild.id,
+        messageId: message.id,
+      });
+
       if (!cfg) return;
 
       const key = emojiKey(reaction.emoji);
