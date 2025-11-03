@@ -11,22 +11,31 @@ module.exports = {
       if (user?.bot) return;
 
       if (reaction?.partial) {
-        try { await reaction.fetch(); } catch { return; }
+        try { await reaction.fetch(); } catch (e) {
+          console.warn('RR Remove: failed to fetch partial reaction', e?.message);
+          return;
+        }
       }
+
       const message = reaction?.message;
       if (!message?.guild) return;
 
       const client = passedClient || reaction.client;
       const db = client?.db;
-      if (!db) return;
+      if (!db) {
+        console.warn('RR Remove: db not ready');
+        return;
+      }
 
       const coll = db.collection('reactionRoles');
-      const cfg = await coll.findOne({ guildId: message.guild.id, messageId: message.id });
+      const cfg = await coll.findOne({
+        guildId: message.guild.id,
+        messageId: message.id,
+      });
+
       if (!cfg) return;
 
       const key = emojiKey(reaction.emoji);
-      if (!key) return;
-
       const hit = cfg.mappings.find(m => m.emojiKey === key);
       if (!hit) return;
 
@@ -39,5 +48,5 @@ module.exports = {
     } catch (e) {
       console.error('messageReactionRemove error:', e);
     }
-  }
+  },
 };
