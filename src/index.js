@@ -1,5 +1,5 @@
 // src/index.js
-const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
+ const { Client, GatewayIntentBits, Partials, Collection, REST, Routes } = require('discord.js');
 const fs = require('fs');               // <-- missing in your file
 const path = require('path');
 const { MongoClient } = require('mongodb');
@@ -23,8 +23,18 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers, // needed for nick/roles
+    GatewayIntentBits.GuildMessageReactions,
   ],
+ partials: [
+    Partials.Message,
+    Partials.Channel,
+    Partials.Reaction,
+    Partials.GuildMember,
+    Partials.User,
+ ],
+ 
 });
+
 client.commands = new Collection();
 
 
