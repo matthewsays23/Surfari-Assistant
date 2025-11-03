@@ -28,9 +28,7 @@ module.exports = {
     const embed = new EmbedBuilder()
   .setColor("81b46b") // Surfari green accent
   .setTitle("🏄 Surfari Verification")
-  .setDescription(
-    "🌴 **Welcome to Surfari!**\n" +
-    "To access exclusive channels and roles, please verify your Roblox account.\n\n",
+  .setDescription("To access exclusive channels and roles, please verify your Roblox account.\n\n" +
     "🔒 *We never ask for or store your Roblox password.*\n\n"
   )
   .setFooter({ text: "Surfari.io", iconURL: "https://drive.google.com/u/0/drive-viewer/AKGpihYGQFgOq5m-JqAH3FrzeOkwtliXQi78kjf0X8l5FbiK_QYcSIGh51Fhhx0hysd5HsnJmpzNHHJ4_pszwH9LF2aXstje6UAQta0=s2560" })
