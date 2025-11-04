@@ -46,91 +46,53 @@ module.exports = {
     if (sub === 'bind') {
       const channel   = interaction.options.getChannel('channel', true);
       const messageId = interaction.options.getString('message_id', true);
-      const text      = interaction.options.getString('mappings', true);
-      const doClear   = interaction.options.getBoolean('clear') || false;
+// --- Parse mappings input ---
+const text = interaction.options.getString("mappings");
+if (!text) return interaction.reply({ ephemeral: true, content: "❌ No mappings provided." });
 
-      const me = await interaction.guild.members.fetchMe();
-      const need = ['ViewChannel','ReadMessageHistory','AddReactions','SendMessages'];
-      const missing = need.filter(p => !channel.permissionsFor(me)?.has(p));
-      if (missing.length) {
-        return interaction.reply({
-          ephemeral: true,
-          content: `I’m missing permissions in ${channel}: **${missing.join(', ')}**`,
-        });
-      }
-      if (!me.permissions.has('ManageRoles')) {
-        return interaction.reply({
-          ephemeral: true,
-          content: 'I need the **Manage Roles** permission.',
-        });
-      }
-
-      // Fetch existing message
-      let msg;
-      try {
-        msg = await channel.messages.fetch(messageId);
-      } catch {
-        return interaction.reply({
-          ephemeral: true,
-          content: `❌ I can’t fetch message \`${messageId}\` in ${channel}.`,
-        });
-      }
-
-      // Parse mappings
-     // Support both multiline and single-line with | or ; separators
+// Support both multiline and single-line (| or ; separators)
 let chunks;
 if (text.includes('\n')) {
-  // multiline: one mapping per line
   chunks = text.split('\n');
 } else {
-  // single-line: split on | or ;
   chunks = text.split(/[|;]/g);
 }
 
 const lines = chunks.map(l => l.trim()).filter(Boolean);
 
-      const errors = [];
+// We'll collect successful mappings here
+const parsed = [];
+const errors = [];
 
-      for (const line of lines) {
-        const parts = line.split('=');
-        if (parts.length !== 2) { errors.push(`Bad line: "${line}"`); continue; }
+for (const line of lines) {
+  const parts = line.split('=');
+  if (parts.length !== 2) {
+    errors.push(`Bad line: "${line}"`);
+    continue;
+  }
 
-        const emojiRaw = parts[0].trim();
-        const roleRaw  = parts[1].trim();
+  const emojiRaw = parts[0].trim();
+  const roleRaw = parts[1].trim();
 
-        // Resolve role
-        let roleId = roleRaw.replace(/[<@&>]/g, '');
-        if (!/^\d{5,}$/.test(roleId)) {
-          const byName = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === roleRaw.toLowerCase());
-          if (!byName) { errors.push(`Role not found: "${roleRaw}"`); continue; }
-          roleId = byName.id;
-        }
-        const role = interaction.guild.roles.cache.get(roleId);
-        if (!role) { errors.push(`Invalid role: ${roleId}`); continue; }
-        if (role.position >= me.roles.highest.position) {
-          errors.push(`Can’t assign **${role.name}** (role is >= my highest role).`);
-          continue;
-        }
+  // Try to resolve the role mention or name
+  const role =
+    interaction.guild.roles.cache.get(roleRaw.replace(/[<@&>]/g, "")) ||
+    interaction.guild.roles.cache.find(r => r.name.toLowerCase() === roleRaw.toLowerCase());
 
-        let emojiForMessage = emojiRaw;
-        let emojiKey        = emojiRaw;
-        if (isCustomEmojiString(emojiRaw)) {
-          const id = extractCustomId(emojiRaw);
-          emojiKey = id;      // custom emoji => id
-        } else {
-          emojiKey = emojiRaw; // unicode => char
-        }
+  if (!role) {
+    errors.push(`Unknown role: "${roleRaw}"`);
+    continue;
+  }
 
-        parsed.push({ emojiForMessage, emojiKey, roleId });
-      }
+  parsed.push({ emojiKey: emojiRaw, roleId: role.id });
+}
 
-      if (!parsed.length) {
-        return interaction.reply({
-          ephemeral: true,
-          content: `❌ No valid mappings.\n${errors.join('\n') || ''}`,
-        });
-      }
-
+if (!parsed.length) {
+  return interaction.reply({
+    ephemeral: true,
+    content: `❌ No valid mappings.\n${errors.join("\n") || ""}`,
+  });
+}
       // Optional: clear reactions
       if (doClear) {
         try { await msg.reactions.removeAll(); } catch {}
