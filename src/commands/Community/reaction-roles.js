@@ -77,8 +77,18 @@ module.exports = {
       }
 
       // Parse mappings
-      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-      const parsed = [];
+     // Support both multiline and single-line with | or ; separators
+let chunks;
+if (text.includes('\n')) {
+  // multiline: one mapping per line
+  chunks = text.split('\n');
+} else {
+  // single-line: split on | or ;
+  chunks = text.split(/[|;]/g);
+}
+
+const lines = chunks.map(l => l.trim()).filter(Boolean);
+
       const errors = [];
 
       for (const line of lines) {
