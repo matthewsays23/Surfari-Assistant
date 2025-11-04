@@ -107,6 +107,9 @@ async function registerGuildCommands() {
   client.db = db;
   console.log('✅ Mongo connected. DB:', DB_NAME);
 
+   global._surfariDb = db;
+  console.log('🔌 Global _surfariDb set:', !!global._surfariDb);
+
   // --- Webhook server (Express app exported from src/server.js) ---
   const createWebhookServer = require(path.join(ROOT, 'server.js'));
   const app = createWebhookServer({ client, db });
